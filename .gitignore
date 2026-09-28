@@ -1,0 +1,14 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# OS / tools
+.DS_Store
+screenshot_*.png
+*.log
+
+# Local secrets / configs (never commit)
+.env
+*.local.*

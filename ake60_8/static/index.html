@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AKE60-8 Control</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --bg:#111418; --panel:#1b2027; --line:#2c333d; --fg:#e6e9ee; --dim:#8a94a3;
+          --acc:#4da3ff; --ok:#3ecf6e; --warn:#ffb020; --bad:#ff4d4f; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.4 -apple-system, system-ui, sans-serif; }
+  header { display:flex; align-items:center; gap:12px; padding:10px 16px; border-bottom:1px solid var(--line); }
+  header h1 { font-size:16px; margin:0 12px 0 0; }
+  .pill { padding:2px 10px; border-radius:999px; font-size:12px; background:var(--line); }
+  .pill.ok { background:#1d4d2e; color:#b8f5cc; } .pill.bad { background:#5a1f22; color:#ffd0d1; }
+  .pill.on { background:#6b4a00; color:#ffe2a3; }
+  .banner { margin:10px 16px 0; padding:8px 12px; border-radius:6px; background:#5a1f22; display:none; }
+  main { display:grid; grid-template-columns: 360px 1fr; gap:16px; padding:16px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px; }
+  .panel h2 { margin:0 0 10px; font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--dim); }
+  .readouts { display:grid; grid-template-columns: repeat(5, 1fr); gap:10px; margin-bottom:16px; }
+  .ro { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
+  .ro .v { font-size:24px; font-variant-numeric: tabular-nums; }
+  .ro .l { color:var(--dim); font-size:12px; }
+  button { background:var(--line); color:var(--fg); border:0; border-radius:6px; padding:8px 12px; font-size:14px; cursor:pointer; }
+  button:hover { filter:brightness(1.2); } button:disabled { opacity:.4; cursor:default; }
+  .big { width:100%; padding:14px; font-size:18px; font-weight:600; }
+  .enable { background:#1f6b3a; } .stop { background:#b3262a; }
+  .row { display:flex; gap:8px; align-items:center; margin:8px 0; }
+  .row label { width:90px; color:var(--dim); }
+  .row input[type=number] { width:80px; background:#0d1014; color:var(--fg); border:1px solid var(--line); border-radius:4px; padding:4px 6px; }
+  input[type=range] { flex:1; accent-color: var(--acc); }
+  .tabs { display:flex; gap:4px; margin-bottom:10px; }
+  .tabs button { flex:1; } .tabs button.active { background:var(--acc); color:#001; }
+  .mode { display:none; } .mode.active { display:block; }
+  .presets button { flex:1; padding:6px 0; }
+  canvas { width:100%; height:260px; display:block; background:#0d1014; border-radius:6px; }
+  .legend { display:flex; gap:14px; font-size:12px; color:var(--dim); margin:6px 0 12px; }
+  .legend i { display:inline-block; width:10px; height:3px; margin-right:5px; vertical-align:middle; }
+  .hint { color:var(--dim); font-size:12px; margin-top:8px; }
+  kbd { background:var(--line); border-radius:3px; padding:0 5px; font-size:11px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>AKE60-8</h1>
+  <span id="conn" class="pill">connecting...</span>
+  <span id="fb" class="pill">feedback</span>
+  <span id="en" class="pill">disabled</span>
+  <span id="info" class="pill" style="margin-left:auto"></span>
+</header>
+<div id="banner" class="banner"></div>
+
+<main>
+  <div>
+    <div class="panel">
+      <button id="btnEnable" class="big enable">ENABLE</button>
+      <div style="height:8px"></div>
+      <button id="btnStop" class="big stop">STOP (Space)</button>
+      <div class="row" style="margin-top:12px">
+        <button id="btnZero" style="flex:1">Set zero here</button>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:16px">
+      <h2>Mode</h2>
+      <div class="tabs">
+        <button data-mode="position">Position</button>
+        <button data-mode="sine">Sine</button>
+        <button data-mode="gait">Gait</button>
+        <button data-mode="velocity">Velocity</button>
+        <button data-mode="torque">Torque</button>
+      </div>
+
+      <div class="mode" id="m-position">
+        <div class="row"><label>Target, deg</label><input type="range" id="posR" min="-360" max="360" step="1"><input type="number" id="posN" step="1"></div>
+        <div class="row presets">
+          <button data-jog="-45">-45</button><button data-jog="-10">-10</button><button data-jog="-1">-1</button>
+          <button data-abs="0">0</button>
+          <button data-jog="1">+1</button><button data-jog="10">+10</button><button data-jog="45">+45</button>
+        </div>
+        <div class="row"><label>Kp</label><input type="range" id="kpR" min="0" max="100" step="0.5"><input type="number" id="kpN" step="0.5"></div>
+        <div class="row"><label>Kd</label><input type="range" id="kdR" min="0" max="5" step="0.05"><input type="number" id="kdN" step="0.05"></div>
+        <div class="row"><label>Max speed</label><input type="range" id="spdR" min="5" max="720" step="5"><input type="number" id="spdN" step="5"></div>
+        <div class="hint">deg/s limit for setpoint changes. Use <kbd>&larr;</kbd> <kbd>&rarr;</kbd> to jog 5 deg.</div>
+      </div>
+
+      <div class="mode" id="m-sine">
+        <div class="row presets">
+          <button data-sine='{"sine_amp":45,"sine_freq":0.25}' title="slow arm swing">Slow swing</button>
+          <button data-sine='{"sine_amp":60,"sine_freq":0.5}' title="reach / pick-and-place">Reach</button>
+          <button data-sine='{"sine_amp":20,"sine_freq":1.0}' title="fast wave">Wave</button>
+          <button data-sine='{"sine_amp":5,"sine_freq":3.0}' title="small fast oscillation">Shake</button>
+        </div>
+        <div class="row"><label>Center, deg</label><input type="range" id="scR" min="-360" max="360" step="1"><input type="number" id="scN" step="1"></div>
+        <div class="row"><label>Amplitude</label><input type="range" id="saR" min="0" max="120" step="1"><input type="number" id="saN" step="1"></div>
+        <div class="row"><label>Freq, Hz</label><input type="range" id="sfR" min="0.05" max="3" step="0.05"><input type="number" id="sfN" step="0.05"></div>
+        <div class="row"><label>Kp</label><input type="range" id="kp3R" min="0" max="100" step="0.5"><input type="number" id="kp3N" step="0.5"></div>
+        <div class="row"><label>Kd</label><input type="range" id="kd3R" min="0" max="5" step="0.05"><input type="number" id="kd3N" step="0.05"></div>
+        <div class="row">
+          <button id="btnSine" style="flex:1; padding:10px; font-weight:600">Start sine</button>
+          <button id="btnCenter" title="set center to current position">Center here</button>
+        </div>
+        <div class="hint" id="sineInfo"></div>
+      </div>
+
+      <div class="mode" id="m-gait">
+        <div class="hint" style="margin:0 0 8px">Sine swing that detects ground contact (extra current / lag vs. learned
+          baseline), then slows down, softens and stops pushing. Try blocking the arm by hand.</div>
+        <div class="row"><label>Center, deg</label><input type="range" id="gcR" min="-360" max="360" step="1"><input type="number" id="gcN" step="1"></div>
+        <div class="row"><label>Amplitude</label><input type="range" id="gaR" min="0" max="120" step="1"><input type="number" id="gaN" step="1"></div>
+        <div class="row"><label>Freq, Hz</label><input type="range" id="gfR" min="0.05" max="2" step="0.05"><input type="number" id="gfN" step="0.05"></div>
+        <div class="row"><label>Kp / Kd</label><input type="number" id="kp4N" step="0.5" style="flex:1"><input type="number" id="kd4N" step="0.05" style="flex:1"><input type="range" id="kp4R" hidden><input type="range" id="kd4R" hidden></div>
+        <h2 style="margin-top:12px">Contact detection</h2>
+        <div class="row"><label>Current, A</label><input type="range" id="gtcR" min="0.05" max="3" step="0.05"><input type="number" id="gtcN" step="0.05"></div>
+        <div class="row"><label>Lag, deg</label><input type="range" id="gteR" min="0.5" max="20" step="0.5"><input type="number" id="gteN" step="0.5"></div>
+        <h2 style="margin-top:12px">On contact</h2>
+        <div class="row"><label>Speed x</label><input type="range" id="gsR" min="0.05" max="1" step="0.05"><input type="number" id="gsN" step="0.05"></div>
+        <div class="row"><label>Stiffness x</label><input type="range" id="gkR" min="0.05" max="1" step="0.05"><input type="number" id="gkN" step="0.05"></div>
+        <div class="row"><label>Push, deg</label><input type="range" id="gpR" min="0" max="15" step="0.5"><input type="number" id="gpN" step="0.5"></div>
+        <div class="row">
+          <button id="btnGait" style="flex:1; padding:10px; font-weight:600">Start gait</button>
+          <button id="btnGCenter" title="set center to current position">Center here</button>
+        </div>
+        <div id="gaitState" style="margin-top:10px; padding:8px 10px; border-radius:6px; background:#0d1014"></div>
+      </div>
+
+      <div class="mode" id="m-velocity">
+        <div class="row"><label>Target, rad/s</label><input type="range" id="velR" min="-20" max="20" step="0.1"><input type="number" id="velN" step="0.1"></div>
+        <div class="hint" id="velRpm"></div>
+        <div class="row presets"><button data-vel="-5">-5</button><button data-vel="-1">-1</button><button data-vel="0">0</button><button data-vel="1">+1</button><button data-vel="5">+5</button></div>
+        <div class="row"><label>Kd</label><input type="range" id="kd2R" min="0.1" max="5" step="0.05"><input type="number" id="kd2N" step="0.05"></div>
+      </div>
+
+      <div class="mode" id="m-torque">
+        <div class="row"><label>Torque, Nm</label><input type="range" id="tqR" min="-3" max="3" step="0.05"><input type="number" id="tqN" step="0.05"></div>
+        <div class="row presets"><button data-tq="-0.5">-0.5</button><button data-tq="0">0</button><button data-tq="0.5">+0.5</button></div>
+        <div class="hint">Unloaded motor accelerates fast under torque. Start small.</div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="readouts">
+      <div class="ro"><div class="v" id="rPos">-</div><div class="l">position, deg</div></div>
+      <div class="ro"><div class="v" id="rVel">-</div><div class="l">speed, deg/s</div></div>
+      <div class="ro"><div class="v" id="rCur">-</div><div class="l">current, A</div></div>
+      <div class="ro"><div class="v" id="rTemp">-</div><div class="l">temp, C</div></div>
+      <div class="ro"><div class="v" id="rErr">-</div><div class="l">status</div></div>
+    </div>
+    <div class="panel">
+      <h2>Position (last 15 s)</h2>
+      <canvas id="cPos"></canvas>
+      <div class="legend"><span><i style="background:#4da3ff"></i>position</span><span><i style="background:#ffb020"></i>setpoint</span><span><i style="background:rgba(255,77,79,0.5)"></i>ground contact (gait)</span></div>
+      <h2>Current / speed</h2>
+      <canvas id="cCur" style="height:180px"></canvas>
+      <div class="legend"><span><i style="background:#3ecf6e"></i>current, A</span><span><i style="background:#c77dff"></i>speed, deg/s (right axis)</span></div>
+    </div>
+  </div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const WINDOW = 15;
+let S = null, hist = [], lastT = -1, editing = {};
+
+async function api(path, body) {
+  const r = await fetch(path, { method: body === undefined ? "GET" : "POST",
+    headers: {"Content-Type": "application/json"}, body: body === undefined ? undefined : JSON.stringify(body) });
+  const j = await r.json();
+  if (j.error) showBanner(j.error);
+  return j;
+}
+function showBanner(msg) { const b = $("banner"); b.textContent = msg; b.style.display = msg ? "block" : "none"; }
+
+// Throttle setpoint POSTs so dragging a slider doesn't flood the server.
+let pending = {}, timer = null;
+function send(obj) {
+  Object.assign(pending, obj);
+  if (!timer) timer = setTimeout(() => { const p = pending; pending = {}; timer = null; api("/api/set", p); }, 40);
+}
+
+// Bind a range+number pair to a target field. Server state doesn't overwrite it while the user edits.
+function bind(r, n, key, fromServer) {
+  const set = v => { $(r).value = v; $(n).value = v; send({[key]: parseFloat(v)}); };
+  for (const id of [r, n]) {
+    $(id).addEventListener("input", e => { editing[key] = Date.now(); set(e.target.value); });
+  }
+  return { key, update: t => { if (Date.now() - (editing[key] || 0) > 800) { const v = fromServer(t); $(r).value = v; $(n).value = v; } } };
+}
+const binds = [
+  bind("posR", "posN", "target_pos", t => t.pos.toFixed(0)),
+  bind("kpR", "kpN", "kp", t => t.kp), bind("kdR", "kdN", "kd", t => t.kd),
+  bind("kd2R", "kd2N", "kd_vel", t => t.kd_vel),
+  bind("kp3R", "kp3N", "kp", t => t.kp), bind("kd3R", "kd3N", "kd", t => t.kd),
+  bind("scR", "scN", "sine_center", t => S.sine.center.toFixed(0)),
+  bind("saR", "saN", "sine_amp", t => S.sine.amp),
+  bind("sfR", "sfN", "sine_freq", t => S.sine.freq),
+  bind("gcR", "gcN", "sine_center", t => S.sine.center.toFixed(0)),
+  bind("gaR", "gaN", "sine_amp", t => S.sine.amp),
+  bind("gfR", "gfN", "sine_freq", t => S.sine.freq),
+  bind("kp4R", "kp4N", "kp", t => t.kp), bind("kd4R", "kd4N", "kd", t => t.kd),
+  bind("gtcR", "gtcN", "gait_cur_thresh", t => S.gait.cur_thresh),
+  bind("gteR", "gteN", "gait_err_thresh", t => S.gait.err_thresh),
+  bind("gsR", "gsN", "gait_slow", t => S.gait.slow),
+  bind("gkR", "gkN", "gait_soft", t => S.gait.soft),
+  bind("gpR", "gpN", "gait_pen", t => S.gait.pen),
+  bind("spdR", "spdN", "max_speed", t => t.max_speed),
+  bind("velR", "velN", "target_vel", t => t.vel.toFixed(1)),
+  bind("tqR", "tqN", "target_torque", t => t.torque.toFixed(2)),
+];
+// Buttons/keys: send a target and update its widgets right away (no wait for the next poll).
+const WIDGETS = {target_pos: ["posR", "posN"], target_vel: ["velR", "velN"], target_torque: ["tqR", "tqN"]};
+function setTarget(key, v) {
+  editing[key] = Date.now(); send({[key]: v});
+  WIDGETS[key].forEach(id => $(id).value = v);
+}
+
+document.querySelectorAll("[data-jog]").forEach(b => b.onclick = () => setTarget("target_pos", Math.round(S.target.pos + +b.dataset.jog)));
+document.querySelectorAll("[data-abs]").forEach(b => b.onclick = () => setTarget("target_pos", +b.dataset.abs));
+document.querySelectorAll("[data-vel]").forEach(b => b.onclick = () => setTarget("target_vel", +b.dataset.vel));
+document.querySelectorAll("[data-tq]").forEach(b => b.onclick = () => setTarget("target_torque", +b.dataset.tq));
+// Sine presets only change shape (amplitude/frequency), never the center.
+const SINE_W = {sine_amp: ["saR", "saN", "gaR", "gaN"], sine_freq: ["sfR", "sfN", "gfR", "gfN"], sine_center: ["scR", "scN", "gcR", "gcN"]};
+function setSine(p) {
+  for (const [k, v] of Object.entries(p)) { editing[k] = Date.now(); SINE_W[k].forEach(id => $(id).value = v); }
+  send(p);
+}
+document.querySelectorAll("[data-sine]").forEach(b => b.onclick = () => setSine(JSON.parse(b.dataset.sine)));
+$("btnSine").onclick = () => api("/api/set", {sine_running: !S.sine.running});
+$("btnGait").onclick = () => api("/api/set", {sine_running: !S.sine.running});
+$("btnGCenter").onclick = () => { if (S.status) setSine({sine_center: Math.round(S.status.pos)}); };
+$("btnCenter").onclick = () => { if (S.status) setSine({sine_center: Math.round(S.status.pos)}); };
+document.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => api("/api/set", {mode: b.dataset.mode}));
+
+$("btnEnable").onclick = async () => { showBanner(""); await api("/api/enable", {}); };
+$("btnStop").onclick = () => api("/api/stop", {});
+$("btnZero").onclick = () => { if (confirm("Set current position as zero (temporary, until power cycle)?")) { api("/api/zero", {}); hist = []; } };
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT" && e.target.type === "number") return;
+  if (e.code === "Space") { e.preventDefault(); api("/api/stop", {}); }
+  if (S && S.mode === "position" && (e.code === "ArrowLeft" || e.code === "ArrowRight")) {
+    e.preventDefault(); setTarget("target_pos", Math.round(S.target.pos + (e.code === "ArrowLeft" ? -5 : 5)));
+  }
+});
+
+function render() {
+  const s = S;
+  $("conn").textContent = s.connected ? `CAN ${s.channel}` : "disconnected";
+  $("conn").className = "pill " + (s.connected ? "ok" : "bad");
+  $("fb").textContent = s.fresh ? "feedback ok" : "no feedback";
+  $("fb").className = "pill " + (s.fresh ? "ok" : "bad");
+  $("en").textContent = s.enabled ? `ENABLED - ${s.mode}` : "disabled";
+  $("en").className = "pill " + (s.enabled ? "on" : "");
+  $("info").textContent = `motor id ${s.motor_id}`;
+  if (s.fault) showBanner(s.fault); else if (!s.connected && s.conn_error) showBanner(s.conn_error);
+  $("btnEnable").disabled = s.enabled || !s.fresh;
+  $("btnZero").disabled = s.enabled || !s.fresh;
+  document.querySelectorAll("[data-mode]").forEach(b => b.classList.toggle("active", b.dataset.mode === s.mode));
+  document.querySelectorAll(".mode").forEach(m => m.classList.toggle("active", m.id === "m-" + s.mode));
+  const st = s.status;
+  $("rPos").textContent = st ? st.pos.toFixed(1) : "-";
+  $("rVel").textContent = st ? st.vel.toFixed(0) : "-";
+  $("rCur").textContent = st ? st.current.toFixed(2) : "-";
+  $("rTemp").textContent = st ? st.temp : "-";
+  $("rErr").textContent = st ? st.error : "-";
+  $("rErr").style.color = st && st.error !== "ok" ? "var(--bad)" : "";
+  binds.forEach(b => b.update(s.target));
+  const sn = s.sine;
+  $("btnSine").textContent = sn.running ? "Stop sine" : "Start sine";
+  $("btnSine").style.background = sn.running ? "#b3262a" : "#1f6b3a";
+  $("btnSine").disabled = !(s.enabled && s.mode === "sine");
+  $("sineInfo").innerHTML =
+    `now: A=${sn.amp_cur} deg, f=${sn.freq_cur} Hz, peak speed ${sn.peak_speed} deg/s<br>` +
+    `tracking error: rms ${sn.err_rms} deg, peak ${sn.err_peak} deg` +
+    (sn.amp > sn.amp_limit ? `<br><span style="color:var(--warn)">amplitude capped to ${sn.amp_limit} deg by peak-speed limit</span>` : "") +
+    (s.enabled && s.mode === "sine" ? "" : "<br>Enable in Sine mode, then Start.");
+  const g = s.gait, gOn = s.enabled && s.mode === "gait";
+  $("btnGait").textContent = sn.running ? "Stop gait" : "Start gait";
+  $("btnGait").style.background = sn.running ? "#b3262a" : "#1f6b3a";
+  $("btnGait").disabled = !gOn;
+  const GC = {learning: "#4da3ff", free: "#3ecf6e", contact: "#ff4d4f", release: "#ffb020"};
+  $("gaitState").innerHTML = !gOn ? "Enable in Gait mode, then Start." :
+    `<b style="color:${GC[g.state]}">${g.state.toUpperCase()}</b>` +
+    (g.state === "learning" ? ` - learning free swing ${g.cycles}/${g.learn_cycles} cycles, keep the arm free` : "") +
+    `<br>contacts: <b>${g.contacts}</b>` +
+    (g.last ? ` - last at ${g.last.pos} deg (+${Math.abs(g.last.res_cur)} A, lag ${Math.abs(g.last.res_err)} deg)` : "") +
+    `<br>residual now: ${g.res_cur} A, ${g.res_err} deg - speed x${g.rate}, stiffness x${g.kp_scale}` +
+    `<br>A=${sn.amp_cur} deg, f=${sn.freq_cur} Hz, tracking rms ${sn.err_rms} deg`;
+  $("velRpm").textContent = `= ${(s.target.vel * 60 / (2 * Math.PI)).toFixed(1)} rpm at output shaft`;
+  drawPlots();
+}
+
+function setupCanvas(c) {
+  const dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+  if (c.width !== w * dpr) { c.width = w * dpr; c.height = h * dpr; }
+  const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  return [g, w, h];
+}
+function plot(canvas, series, bands) {
+  const [g, w, h] = setupCanvas(canvas);
+  if (hist.length < 2) return;
+  const tEnd = hist[hist.length - 1][0], tStart = tEnd - WINDOW, pad = 40;
+  const X = t => pad + (t - tStart) / WINDOW * (w - pad * 2);
+  if (bands) {  // shade samples where bands(p) is true (gait ground contact)
+    g.fillStyle = "rgba(255,77,79,0.18)";
+    for (let i = 1; i < hist.length; i++) {
+      if (hist[i][0] >= tStart && bands(hist[i])) g.fillRect(X(hist[i - 1][0]), 0, X(hist[i][0]) - X(hist[i - 1][0]) + 0.5, h);
+    }
+  }
+  for (const s of series) {
+    const vals = hist.map(s.get).filter(v => v !== null);
+    if (!vals.length) continue;
+    let lo = Math.min(...vals, ...(s.also || [])), hi = Math.max(...vals, ...(s.also || []));
+    if (hi - lo < s.minSpan) { const m = (hi + lo) / 2; lo = m - s.minSpan / 2; hi = m + s.minSpan / 2; }
+    const mg = (hi - lo) * 0.1; lo -= mg; hi += mg;
+    const Y = v => h - 10 - (v - lo) / (hi - lo) * (h - 20);
+    if (!s.noAxis) {  // grid + labels from the first series on this side
+      g.fillStyle = "#8a94a3"; g.font = "11px sans-serif"; g.textAlign = s.right ? "left" : "right";
+      for (let i = 0; i <= 4; i++) {
+        const v = lo + (hi - lo) * i / 4, y = Y(v);
+        if (!s.right) { g.strokeStyle = "#232a33"; g.beginPath(); g.moveTo(pad, y); g.lineTo(w - pad, y); g.stroke(); }
+        g.fillText(v.toFixed(Math.abs(hi - lo) < 5 ? 2 : 0), s.right ? w - pad + 4 : pad - 4, y + 4);
+      }
+    }
+    g.strokeStyle = s.color; g.lineWidth = 1.6; g.beginPath(); let pen = false;
+    for (const p of hist) {
+      if (p[0] < tStart) continue; const v = s.get(p);
+      if (v === null) { pen = false; continue; }
+      pen ? g.lineTo(X(p[0]), Y(v)) : g.moveTo(X(p[0]), Y(v)); pen = true;
+    }
+    g.stroke();
+  }
+}
+function drawPlots() {
+  // Position and setpoint share one scale: include both in the range calculation.
+  const pos = hist.map(p => p[1]).concat(hist.map(p => p[2]).filter(v => v !== null));
+  const lo = Math.min(...pos), hi = Math.max(...pos);
+  plot($("cPos"), [
+    { get: p => p[1], color: "#4da3ff", minSpan: 10, also: [lo, hi] },
+    { get: p => p[2], color: "#ffb020", minSpan: 10, also: [lo, hi], noAxis: true },
+  ], p => p[5] === 1);
+  plot($("cCur"), [
+    { get: p => p[3], color: "#3ecf6e", minSpan: 1 },
+    { get: p => p[4], color: "#c77dff", minSpan: 20, right: true },
+  ]);
+}
+
+async function poll() {
+  try {
+    const s = await (await fetch(`/api/state?since=${lastT}`)).json();
+    S = s;
+    if (s.history.length) { hist.push(...s.history); lastT = hist[hist.length - 1][0]; }
+    const cut = lastT - WINDOW - 1; while (hist.length && hist[0][0] < cut) hist.shift();
+    render();
+  } catch (e) {
+    $("conn").textContent = "server offline"; $("conn").className = "pill bad";
+  }
+  setTimeout(poll, 50);  // 20 Hz; also acts as the server-side watchdog heartbeat
+}
+poll();
+window.addEventListener("resize", drawPlots);
+</script>
+</body>
+</html>
