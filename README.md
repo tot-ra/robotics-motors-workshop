@@ -8,6 +8,10 @@ Hands-on control of robot joint actuators over CAN.
 
 Hardware used: CubeMars AKE60-8 KV80, CANine/CANable USB-CAN adapter (slcan firmware), 1 Mbps CAN.
 
+<img width="300" alt="IMG_20260928_195132" src="https://github.com/user-attachments/assets/00279dbe-eed3-4aa7-abd8-06995160d0e8" />
+<img width="300" alt="IMG_20260928_193637" src="https://github.com/user-attachments/assets/719ef3cf-312b-4723-b83b-787f9846957e" />
+
+
 Quick start:
 ```bash
 cd ake60_8
